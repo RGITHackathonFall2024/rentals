@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Аренда квартир в Ростове-на-Дону</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="#">Аренда квартир</a>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row mb-4">
+            <div class="col">
+                <div class="card">
+                    <div class="card-body">
+                        <form id="filterForm" class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label">Цена от</label>
+                                <input type="number" class="form-control" name="minPrice">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Цена до</label>
+                                <input type="number" class="form-control" name="maxPrice">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Комнат от</label>
+                                <input type="number" class="form-control" name="minRooms">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Комнат до</label>
+                                <input type="number" class="form-control" name="maxRooms">
+                            </div>
+                            <div class="col-12">
+                                <button type="submit" class="btn btn-primary">Применить фильтры</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row" id="listings"></div>
+        
+        <div class="text-center mt-4 mb-4">
+            <button id="loadMore" class="btn btn-primary">Загрузить ещё</button>
+        </div>
+    </div>
+
+    <!-- Модальное окно для детальной информации -->
+    <div class="modal fade" id="listingModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="listingCarousel" class="carousel slide mb-4">
+                        <div class="carousel-inner"></div>
+                        <button class="carousel-control-prev" type="button" data-bs-target="#listingCarousel" data-bs-slide="prev">
+                            <span class="carousel-control-prev-icon"></span>
+                        </button>
+                        <button class="carousel-control-next" type="button" data-bs-target="#listingCarousel" data-bs-slide="next">
+                            <span class="carousel-control-next-icon"></span>
+                        </button>
+                    </div>
+                    <div id="map" style="height: 300px" class="mb-4"></div>
+                    <div id="listingDetails"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script>
+        let currentPage = 1;
+        let isLoading = false;
+        let hasMore = true;
+        let currentFilters = {};
+
+        const listingsContainer = document.getElementById('listings');
+        const loadMoreBtn = document.getElementById('loadMore');
+        const filterForm = document.getElementById('filterForm');
+        const listingModal = new bootstrap.Modal(document.getElementById('listingModal'));
+        
+        filterForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const formData = new FormData(filterForm);
+            currentFilters = Object.fromEntries(formData.entries());
+            currentPage = 1;
+            hasMore = true;
+            listingsContainer.innerHTML = '';
+            loadListings();
+        });
+
+        loadMoreBtn.addEventListener('click', () => {
+            if (!isLoading && hasMore) {
+                currentPage++;
+                loadListings();
+            }
+        });
+
+        async function loadListings() {
+            if (isLoading) return;
+            isLoading = true;
+            loadMoreBtn.disabled = true;
+
+            const params = new URLSearchParams({
+                page: currentPage,
+                limit: 20,
+                ...currentFilters
+            });
+
+            try {
+                const response = await fetch(`/api/listings?${params}`);
+                const data = await response.json();
+                
+                hasMore = currentPage < data.totalPages;
+                loadMoreBtn.style.display = hasMore ? 'block' : 'none';
+
+                data.items.forEach(listing => {
+                    const card = createListingCard(listing);
+                    listingsContainer.appendChild(card);
+                });
+            } catch (error) {
+                console.error('Ошибка загрузки объявлений:', error);
+            } finally {
+                isLoading = false;
+                loadMoreBtn.disabled = false;
+            }
+        }
+
+        function createListingCard(listing) {
+            const col = document.createElement('div');
+            col.className = 'col-md-6 col-lg-4 mb-4';
+            
+            col.innerHTML = `
+                <div class="card h-100">
+                    <img src="${listing.photos[0]}" class="card-img-top" alt="Фото квартиры">
+                    <div class="card-body">
+                        <h5 class="card-title">${listing.title}</h5>
+                        <p class="card-text">
+                            <strong>${listing.price.toLocaleString()} ₽/мес</strong><br>
+                            ${listing.address}
+                        </p>
+                        <button class="btn btn-primary" onclick="showListingDetails(${listing.id})">
+                            Подробнее
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            return col;
+        }
+
+        let map = null;
+
+        async function showListingDetails(id) {
+            const response = await fetch(`/api/listings/${id}`);
+            const listing = await response.json();
+
+            document.querySelector('.modal-title').textContent = listing.title;
+            
+            // Обновляем карусель
+            const carousel = document.querySelector('.carousel-inner');
+            carousel.innerHTML = listing.photos.map((photo, index) => `
+                <div class="carousel-item ${index === 0 ? 'active' : ''}">
+                    <img src="${photo}" class="d-block w-100" alt="Фото ${index + 1}">
+                </div>
+            `).join('');
+
+            // Обновляем детали
+            document.getElementById('listingDetails').innerHTML = `
+                <h4>${listing.price.toLocaleString()} ₽/мес</h4>
+                <p><strong>Адрес:</strong> ${listing.address}</p>
+                <p><strong>Площадь:</strong> ${listing.area} м²</p>
+                <p><strong>Комнат:</strong> ${listing.rooms}</p>
+                <p><strong>Описание:</strong> ${listing.description.replaceAll("\n", "<br>")}</p>
+                <p>
+                    <strong>Контакты:</strong><br>
+                    ${listing.contact.name}<br>
+                    ${listing.contact.phone}
+                </p>
+            `;
+
+            // Инициализируем карту
+            if (map) {
+                map.remove();
+            }
+            map = L.map('map').setView([listing.location.lat, listing.location.lng], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+            L.marker([listing.location.lat, listing.location.lng]).addTo(map);
+
+            listingModal.show();
+        }
+
+        // Начальная загрузка
+        loadListings();
+    </script>
+</body>
+</html>

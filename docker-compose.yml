@@ -1,0 +1,6 @@
+services:
+  rentals:
+    build: .
+    restart: always
+    ports:
+      - "10001:3000"
