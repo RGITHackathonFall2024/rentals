@@ -84,6 +84,7 @@ const swaggerSpec = swaggerJsdoc(swaggerOptions);
 app.use(cors());
 app.use(express.static('public'));
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.get('/openapi.json', (req, res) => res.status(200).json(swaggerSpec))
 
 let listings = [];
 
