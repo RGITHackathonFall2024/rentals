@@ -76,7 +76,7 @@ const swaggerOptions = {
             }
         }
     },
-    apis: ['./server.js'] // файлы с аннотациями
+    apis: ['./src/server.js'] // файлы с аннотациями
 };
 
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
