@@ -106,8 +106,7 @@ function getRandomColor() {
 // Генерация случайного текста для изображения
 function getRandomText() {
     const texts = [
-        'Dmitry not so cute', 'Artem Shalamov', 'Arthur pozitp', 'Kirill Velikiy',
-        'bethetka.ru game studio'
+        'RoboGradeIndustriesTeam', 'bethetka', 'random word', 'how are you?', 'meow :3'
     ];
     return texts[Math.floor(Math.random() * texts.length)];
 }
